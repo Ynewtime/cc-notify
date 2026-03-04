@@ -91,7 +91,9 @@ resolve_source() {
 }
 
 cleanup() {
-  if [ -n "$CLEANUP_DIR" ]; then rm -rf "$CLEANUP_DIR"; fi
+  if [ -n "$CLEANUP_DIR" ] && [ -d "$CLEANUP_DIR" ] && [ "$CLEANUP_DIR" != "/" ]; then
+    rm -rf -- "$CLEANUP_DIR"
+  fi
 }
 trap cleanup EXIT
 

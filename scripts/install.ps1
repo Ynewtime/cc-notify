@@ -241,7 +241,12 @@ try {
 
 } finally {
   # Cleanup temp dir if in remote mode
-  if ($CleanupDir -and (Test-Path $CleanupDir)) {
+  $tempRoot = [IO.Path]::GetTempPath()
+  if (
+    $CleanupDir -and
+    (Test-Path $CleanupDir) -and
+    $CleanupDir.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)
+  ) {
     Remove-Item $CleanupDir -Recurse -Force -ErrorAction SilentlyContinue
   }
 }

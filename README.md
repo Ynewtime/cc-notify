@@ -26,6 +26,8 @@ cc-notify/
 └── scripts/
     ├── install.sh            # Installer for Linux / macOS
     ├── install.ps1           # Installer for Windows
+    ├── uninstall.sh          # Uninstaller for Linux / macOS
+    ├── uninstall.ps1         # Uninstaller for Windows
     └── merge-hooks.js        # JSON merge utility (used by installers)
 ```
 
@@ -64,6 +66,18 @@ The installer will:
 Restart Claude Code after installation.
 
 > The config directory is detected via `CLAUDE_CONFIG_DIR` env var, falling back to `~/.claude` (Unix) or `%USERPROFILE%\.claude` (Windows).
+
+### Uninstall
+
+```bash
+# Linux / macOS / WSL
+curl -fsSL https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uninstall.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uninstall.ps1 | iex"
+```
+
+The uninstaller removes runtime files and hooks configuration without affecting other settings in `settings.json`. It automatically backs up `settings.json` before making changes.
 
 ## Manual Installation
 

@@ -26,6 +26,8 @@ cc-notify/
 └── scripts/
     ├── install.sh            # 安装脚本（Linux / macOS）
     ├── install.ps1           # 安装脚本（Windows）
+    ├── uninstall.sh          # 卸载脚本（Linux / macOS）
+    ├── uninstall.ps1         # 卸载脚本（Windows）
     └── merge-hooks.js        # JSON 合并工具（安装脚本调用）
 ```
 
@@ -64,6 +66,18 @@ git clone https://github.com/Ynewtime/cc-notify.git; cd cc-notify
 安装完成后需重启 Claude Code。
 
 > 配置目录优先读取 `CLAUDE_CONFIG_DIR` 环境变量，未设置则使用 `~/.claude`（Unix）或 `%USERPROFILE%\.claude`（Windows）。
+
+### 卸载
+
+```bash
+# Linux / macOS / WSL
+curl -fsSL https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uninstall.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uninstall.ps1 | iex"
+```
+
+卸载脚本会移除运行时文件和 hooks 配置，不影响 `settings.json` 中的其他设置。卸载前会自动备份 `settings.json`。
 
 ## 手动安装
 

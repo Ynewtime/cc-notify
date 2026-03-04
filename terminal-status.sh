@@ -9,14 +9,20 @@
 
 ACTION="${1:-done}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ASKING_MARKER="/tmp/claude-hook-asking"
+TMP_BASE="${TMPDIR:-/tmp}"
+ASKING_MARKER="$TMP_BASE/claude-hook-asking-$(id -u 2>/dev/null || echo 0)"
 
 # ── Feature toggles ─────────────────────────────
 ENABLE_TOAST=true
 # ─────────────────────────────────────────────────
 
 # Save stdin (hook event JSON) to temp file for safe handling
-HOOK_FILE=$(mktemp /tmp/claude-hook-XXXXXX.json 2>/dev/null || echo /tmp/claude-hook-$$.json)
+HOOK_FILE=$(mktemp "$TMP_BASE/claude-hook-XXXXXX.json" 2>/dev/null)
+[ -z "$HOOK_FILE" ] && exit 0
+cleanup_hook_file() {
+  rm -f "$HOOK_FILE"
+}
+trap cleanup_hook_file EXIT INT TERM
 cat > "$HOOK_FILE"
 
 # Find the PTY of the ancestor Claude process.
@@ -44,7 +50,7 @@ send_toast() {
 }
 
 TTY=$(find_tty)
-[ -z "$TTY" ] && { rm -f "$HOOK_FILE"; exit 0; }
+[ -z "$TTY" ] && exit 0
 
 case "$ACTION" in
   working)
@@ -77,5 +83,3 @@ case "$ACTION" in
     printf '\033]9;4;0;0\007' > "$TTY" 2>/dev/null
     ;;
 esac
-
-rm -f "$HOOK_FILE"

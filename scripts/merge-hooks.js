@@ -8,9 +8,13 @@ const path = require("path");
 
 const MARKER = "terminal-status";
 
+function shQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+}
+
 function buildHooks(claudeDir, windows) {
   if (windows) {
-    const script = claudeDir + "\\terminal-status.ps1";
+    const script = path.join(claudeDir, "terminal-status.ps1");
     const prefix =
       'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' +
       script +
@@ -38,27 +42,28 @@ function buildHooks(claudeDir, windows) {
     };
   }
 
-  const script = claudeDir + "/terminal-status.sh";
+  const script = path.join(claudeDir, "terminal-status.sh");
+  const scriptCommand = shQuote(script);
   return {
     SessionStart: [
-      { hooks: [{ type: "command", command: script + " reset" }] },
+      { hooks: [{ type: "command", command: scriptCommand + " reset" }] },
     ],
     UserPromptSubmit: [
-      { hooks: [{ type: "command", command: script + " working" }] },
+      { hooks: [{ type: "command", command: scriptCommand + " working" }] },
     ],
     PostToolUse: [
       {
         matcher: "AskUserQuestion|ExitPlanMode",
-        hooks: [{ type: "command", command: script + " mark" }],
+        hooks: [{ type: "command", command: scriptCommand + " mark" }],
       },
     ],
     PermissionRequest: [
       {
         matcher: ".*",
-        hooks: [{ type: "command", command: script + " alert" }],
+        hooks: [{ type: "command", command: scriptCommand + " alert" }],
       },
     ],
-    Stop: [{ hooks: [{ type: "command", command: script + " done" }] }],
+    Stop: [{ hooks: [{ type: "command", command: scriptCommand + " done" }] }],
   };
 }
 
@@ -82,7 +87,7 @@ function main() {
   }
 
   const settingsPath = path.resolve(positional[0]);
-  const claudeDir = positional[1];
+  const claudeDir = path.resolve(positional[1]);
 
   // Read existing settings
   let settings = {};
