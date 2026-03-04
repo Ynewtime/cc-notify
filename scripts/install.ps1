@@ -1,6 +1,12 @@
 # cc-notify installer for Windows
 # Supports both local (git clone) and remote (irm | iex) execution.
+# Usage: install.ps1 [-DryRun] [-Yes]
 #Requires -Version 5.1
+param(
+  [switch]$DryRun,
+  [Alias("y")]
+  [switch]$Yes
+)
 $ErrorActionPreference = "Stop"
 
 $RepoRaw = if ($env:CC_NOTIFY_REPO) { $env:CC_NOTIFY_REPO } `
@@ -46,6 +52,12 @@ function Resolve-Source {
     }
   }
 
+  # In dry-run + remote mode, skip download
+  if ($DryRun) {
+    Write-Dots "fetch" "4 files from remote" "(skip, dry run)"
+    return
+  }
+
   # Remote mode: download files to temp dir
   $tmpDir = Join-Path ([IO.Path]::GetTempPath()) "cc-notify-$(Get-Random)"
   New-Item -Path $tmpDir -ItemType Directory -Force | Out-Null
@@ -73,12 +85,29 @@ function Resolve-Source {
   $script:MergeScript = Join-Path $tmpDir "merge-hooks.js"
 }
 
-# -- Begin ---------------------------------------------------
+# -- Detect Windows Terminal settings ------------------------
+
+function Find-WtSettings {
+  $localAppData = $env:LOCALAPPDATA
+  if (-not $localAppData) { return $null }
+
+  $candidates = @(
+    (Join-Path $localAppData "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
+    (Join-Path $localAppData "Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json"),
+    (Join-Path $localAppData "Microsoft\Windows Terminal\settings.json")
+  )
+
+  return $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+# ============================================================
+# Phase 1: Checks
+# ============================================================
 
 Write-Host "cc-notify install"
 Write-Host ""
 
-# 1. Check Node.js
+# Node.js
 $nodePath = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodePath) {
   Stop-Install "Node.js is required but not found."
@@ -86,7 +115,7 @@ if (-not $nodePath) {
 $nodeVer = & node --version 2>$null
 Write-Dots "check" "Node.js" $nodeVer
 
-# 2. Detect Claude Code config directory
+# Claude Code config directory
 $ClaudeDir = if ($env:CLAUDE_CONFIG_DIR) {
   $env:CLAUDE_CONFIG_DIR
 } else {
@@ -94,17 +123,72 @@ $ClaudeDir = if ($env:CLAUDE_CONFIG_DIR) {
 }
 Write-Dots "check" "Claude Code config" $ClaudeDir
 
-if (-not (Test-Path $ClaudeDir)) {
-  New-Item -Path $ClaudeDir -ItemType Directory -Force | Out-Null
+# Windows Terminal
+$wtSettings = Find-WtSettings
+$wtNeedsUpdate = $false
+if ($wtSettings) {
+  & node -e "
+    var s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+    process.exit(s.windowingBehavior === 'useExisting' ? 0 : 1);
+  " $wtSettings 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Dots "check" "Windows Terminal" "already set"
+  } else {
+    Write-Dots "check" "Windows Terminal" "found, windowingBehavior not set"
+    $wtNeedsUpdate = $true
+  }
 }
 
 Write-Host ""
 
-# 3. Resolve project files (local or remote)
+# ============================================================
+# Phase 2: Show plan
+# ============================================================
+
+Write-Host "  The following changes will be made:"
+Write-Host ""
+Write-Host "    copy    terminal-status.ps1, toast-extract.js, toast.ps1"
+Write-Host "            > $ClaudeDir"
+Write-Host "    config  Merge 5 hook events into settings.json"
+if ($wtNeedsUpdate) {
+  Write-Host "    config  Set Windows Terminal windowingBehavior (optional)"
+}
+Write-Host ""
+
+# ============================================================
+# Phase 3: Confirm or dry-run
+# ============================================================
+
+if ($DryRun) {
+  Write-Host "Dry run complete. No changes were made."
+  exit 0
+}
+
+if ($Yes) {
+  Write-Host "Proceed? [y/N] y (--yes)"
+} else {
+  $reply = Read-Host "Proceed? [y/N]"
+  if ($reply -ne "y" -and $reply -ne "Y") {
+    Write-Host "Cancelled."
+    exit 0
+  }
+}
+Write-Host ""
+
+# ============================================================
+# Phase 4: Execute
+# ============================================================
+
+# Resolve project files (local or remote)
 Resolve-Source
 
 try {
-  # 4. Copy files (use PS1 version of terminal-status for Windows)
+  # Create config directory
+  if (-not (Test-Path $ClaudeDir)) {
+    New-Item -Path $ClaudeDir -ItemType Directory -Force | Out-Null
+  }
+
+  # Copy files
   $SettingsFile = Join-Path $ClaudeDir "settings.json"
 
   Copy-Item (Join-Path $ProjectDir "terminal-status.ps1") $ClaudeDir -Force
@@ -118,7 +202,7 @@ try {
 
   Write-Host ""
 
-  # 5. Backup settings.json
+  # Backup settings.json
   if (Test-Path $SettingsFile) {
     $BackupDir = Join-Path $ClaudeDir "backups"
     if (-not (Test-Path $BackupDir)) {
@@ -130,54 +214,29 @@ try {
     Write-Dots "backup" "settings.json" "ok"
   }
 
-  # 6. Merge hooks (use --windows for PowerShell command format)
+  # Merge hooks
   & node $MergeScript $SettingsFile $ClaudeDir --windows
   if ($LASTEXITCODE -ne 0) {
     Stop-Install "Failed to merge hooks config."
   }
 
-  Write-Host ""
-
-  # 7. Windows Terminal settings
-  $localAppData = $env:LOCALAPPDATA
-  if ($localAppData) {
-    $wtCandidates = @(
-      (Join-Path $localAppData "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"),
-      (Join-Path $localAppData "Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json"),
-      (Join-Path $localAppData "Microsoft\Windows Terminal\settings.json")
-    )
-
-    $wtSettings = $wtCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-    if ($wtSettings) {
-      # Use Node.js for safe JSON handling (avoids ConvertTo-Json depth/reorder issues)
+  # Windows Terminal settings
+  if ($wtNeedsUpdate) {
+    Write-Host ""
+    $wtReply = Read-Host "  config  Set Windows Terminal windowingBehavior to useExisting? [y/N]"
+    if ($wtReply -eq "y" -or $wtReply -eq "Y") {
+      Copy-Item $wtSettings "$wtSettings.bak"
       & node -e "
-        var s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        process.exit(s.windowingBehavior === 'useExisting' ? 0 : 1);
-      " $wtSettings 2>$null
-      if ($LASTEXITCODE -eq 0) {
-        Write-Dots "config" "Windows Terminal" "already set"
-      } else {
-        $reply = Read-Host "  config  Set Windows Terminal windowingBehavior to useExisting? [y/N]"
-        if ($reply -eq "y" -or $reply -eq "Y") {
-          Copy-Item $wtSettings "$wtSettings.bak"
-          & node -e "
-            var fs = require('fs');
-            var p = process.argv[1];
-            var s = JSON.parse(fs.readFileSync(p, 'utf8'));
-            s.windowingBehavior = 'useExisting';
-            fs.writeFileSync(p, JSON.stringify(s, null, 4) + '\n', 'utf8');
-          " $wtSettings
-          Write-Dots "config" "Windows Terminal" "ok"
-        } else {
-          Write-Dots "config" "Windows Terminal" "skipped"
-        }
-      }
+        var fs = require('fs');
+        var p = process.argv[1];
+        var s = JSON.parse(fs.readFileSync(p, 'utf8'));
+        s.windowingBehavior = 'useExisting';
+        fs.writeFileSync(p, JSON.stringify(s, null, 4) + '\n', 'utf8');
+      " $wtSettings
+      Write-Dots "config" "Windows Terminal" "ok"
     } else {
-      Write-Dots "config" "Windows Terminal" "not found, skipped"
+      Write-Dots "config" "Windows Terminal" "skipped"
     }
-  } else {
-    Write-Dots "config" "Windows Terminal" "LOCALAPPDATA not set, skipped"
   }
 
 } finally {
