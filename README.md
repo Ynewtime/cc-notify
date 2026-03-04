@@ -1,19 +1,21 @@
-# Claude Code Notification System (Windows Terminal)
+# Claude Code Notification System
 
 [中文文档](README_ZH.md)
 
-Tab status indicators and Windows desktop notifications for Claude Code in Windows Terminal.
+Tab status indicators and desktop notifications for Claude Code.
 
-Supports **Linux / macOS (WSL)** and **Windows native**.
+Supports **Linux / macOS / WSL** and **Windows native**.
 
 ## Features
 
 | Feature | Behavior |
 |---------|----------|
-| **Working indicator** | Windows Terminal tab shows a loading spinner animation |
-| **Task complete** | Clear animation + bell + Windows toast (`<project> · 完成`) |
-| **Awaiting decision** | Clear animation + bell + Windows toast (`<project> · 等待决策`) |
-| **Permission request** | Keep animation + bell + Windows toast (`<project> · 等待决策`) |
+| **Working indicator** | Tab progress animation (Windows Terminal, iTerm2, Ghostty, WezTerm, Konsole) |
+| **Task complete** | Clear animation + bell + toast (`<project> · 完成`) |
+| **Awaiting decision** | Clear animation + bell + toast (`<project> · 等待决策`) |
+| **Permission request** | Keep animation + bell + toast (`<project> · 等待决策`) |
+
+> Tab animation uses OSC 9;4, supported by Windows Terminal, iTerm2 (v3.5.6+), Ghostty (v1.2.0+), WezTerm, Konsole, and VTE/Ptyxis. Toast notifications currently require Windows (WSL or native). Bell works on all platforms.
 
 ## Files
 
@@ -75,6 +77,16 @@ curl -fsSL https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uni
 
 # Windows (PowerShell)
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uninstall.ps1 | iex"
+```
+
+Or from source:
+
+```bash
+# Linux / macOS / WSL
+bash scripts/uninstall.sh
+
+# Windows (PowerShell)
+.\scripts\uninstall.ps1
 ```
 
 The uninstaller removes runtime files and hooks configuration without affecting other settings in `settings.json`. It automatically backs up `settings.json` before making changes.
@@ -158,7 +170,20 @@ Merge the following `hooks` config into your `~/.claude/settings.json`:
 }
 ```
 
-> **Note**: Replace `<your-username>` with your actual username. On Windows, use `terminal-status.ps1` with the PowerShell command format.
+> **Note**: Replace `<your-username>` with your actual username.
+
+On Windows, use `terminal-status.ps1` with the PowerShell command format. Example for the `Stop` event:
+
+```json
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\<your-username>\\.claude\\terminal-status.ps1\" done"
+    }
+  ]
+}
+```
 
 ### 3. Recommended: Optimize Windows Terminal window behavior
 
@@ -223,8 +248,8 @@ This keeps the tab loading animation and bell, but disables Windows desktop noti
 |----------|-------------|
 | **WSL** | Windows Terminal, Node.js, PowerShell (via `powershell.exe`) |
 | **Windows native** | Windows Terminal, Node.js, PowerShell 5.1+ |
-| **Linux (non-WSL)** | Node.js (toast and tab animation unavailable) |
-| **macOS** | Node.js (toast and tab animation unavailable) |
+| **Linux (non-WSL)** | Node.js; tab animation works in supported terminals, toast unavailable |
+| **macOS** | Node.js; tab animation works in iTerm2, toast unavailable |
 
 ## Technical Details
 
@@ -232,16 +257,18 @@ This keeps the tab loading animation and bell, but disables Windows desktop noti
 
 Claude Code hook commands run as subprocesses with stdout redirected to an internal pipe. On Linux/WSL, the script walks up the process tree to find the PTY of the ancestor Claude process (e.g., `/dev/pts/0`) and writes directly to that device. On Windows, the script opens `CONOUT$` to bypass stdout redirection.
 
-### Windows Terminal progress animation
+### Tab progress animation (OSC 9;4)
 
-Uses Windows Terminal's proprietary OSC 9;4 escape sequences:
+Uses OSC 9;4 escape sequences (originally from ConEmu, now widely adopted):
 
 - `\033]9;4;3;0\007` -- Start indeterminate progress animation (loading spinner)
 - `\033]9;4;0;0\007` -- Clear progress animation
 
+Supported terminals: Windows Terminal, iTerm2 (v3.5.6+), Ghostty (v1.2.0+), WezTerm, Konsole (KDE Gear 2025-04), VTE/Ptyxis. Not supported: Kitty (conflicts with OSC 9 notifications), Alacritty.
+
 ### Why not use OSC 0 to change the tab title?
 
-Claude Code is a TUI application that continuously manages the terminal title. Any OSC 0 sequence written externally gets immediately overwritten. OSC 9;4 is a Windows Terminal-specific extension that is not affected by Claude Code.
+Claude Code is a TUI application that continuously manages the terminal title. Any OSC 0 sequence written externally gets immediately overwritten. OSC 9;4 is an extension not affected by Claude Code's title management.
 
 ### Toast Notifications
 

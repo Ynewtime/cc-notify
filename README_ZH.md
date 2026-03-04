@@ -1,19 +1,21 @@
-# Claude Code 通知系统（Windows Terminal）
+# Claude Code 通知系统
 
 [English](README.md)
 
-在 Windows Terminal 中为 Claude Code 提供标签页状态指示和桌面通知。
+为 Claude Code 提供标签页状态指示和桌面通知。
 
-支持 **Linux / macOS (WSL)** 和 **Windows 原生**。
+支持 **Linux / macOS / WSL** 和 **Windows 原生**。
 
 ## 功能概览
 
 | 功能 | 表现 |
 |------|------|
-| **工作中指示** | Windows Terminal 标签页显示 loading 圆环动画 |
-| **任务完成通知** | 清除动画 + 响铃 + Windows toast 弹窗（`<项目路径> · 完成`） |
-| **等待决策通知** | 清除动画 + 响铃 + Windows toast 弹窗（`<项目路径> · 等待决策`） |
-| **权限审批通知** | 保持动画 + 响铃 + Windows toast 弹窗（`<项目路径> · 等待决策`） |
+| **工作中指示** | 标签页显示进度动画（Windows Terminal、iTerm2、Ghostty、WezTerm、Konsole） |
+| **任务完成通知** | 清除动画 + 响铃 + toast 弹窗（`<项目路径> · 完成`） |
+| **等待决策通知** | 清除动画 + 响铃 + toast 弹窗（`<项目路径> · 等待决策`） |
+| **权限审批通知** | 保持动画 + 响铃 + toast 弹窗（`<项目路径> · 等待决策`） |
+
+> 标签页动画使用 OSC 9;4 序列，支持 Windows Terminal、iTerm2 (v3.5.6+)、Ghostty (v1.2.0+)、WezTerm、Konsole 和 VTE/Ptyxis。Toast 通知当前需要 Windows（WSL 或原生）环境。响铃在所有平台可用。
 
 ## 文件说明
 
@@ -75,6 +77,16 @@ curl -fsSL https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uni
 
 # Windows (PowerShell)
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Ynewtime/cc-notify/main/scripts/uninstall.ps1 | iex"
+```
+
+或从源码卸载：
+
+```bash
+# Linux / macOS / WSL
+bash scripts/uninstall.sh
+
+# Windows (PowerShell)
+.\scripts\uninstall.ps1
 ```
 
 卸载脚本会移除运行时文件和 hooks 配置，不影响 `settings.json` 中的其他设置。卸载前会自动备份 `settings.json`。
@@ -158,7 +170,20 @@ Windows 环境请复制 `terminal-status.ps1`、`toast-extract.js`、`toast.ps1`
 }
 ```
 
-> **注意**：将 `<你的用户名>` 替换为实际用户名。Windows 环境请使用 `terminal-status.ps1` 配合 PowerShell 命令格式。
+> **注意**：将 `<你的用户名>` 替换为实际用户名。
+
+Windows 环境请使用 `terminal-status.ps1` 配合 PowerShell 命令格式。以 `Stop` 事件为例：
+
+```json
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\<你的用户名>\\.claude\\terminal-status.ps1\" done"
+    }
+  ]
+}
+```
 
 ### 3. 推荐：优化 Windows Terminal 窗口行为
 
@@ -222,8 +247,8 @@ $EnableToast = $false  # terminal-status.ps1
 |------|------|
 | **WSL** | Windows Terminal、Node.js、PowerShell（通过 `powershell.exe`） |
 | **Windows 原生** | Windows Terminal、Node.js、PowerShell 5.1+ |
-| **Linux（非 WSL）** | Node.js（toast 和标签页动画不可用） |
-| **macOS** | Node.js（toast 和标签页动画不可用） |
+| **Linux（非 WSL）** | Node.js；标签页动画在支持的终端中可用，toast 不可用 |
+| **macOS** | Node.js；标签页动画在 iTerm2 中可用，toast 不可用 |
 
 ## 技术细节
 
@@ -231,16 +256,18 @@ $EnableToast = $false  # terminal-status.ps1
 
 Claude Code 的 hook 命令以子进程运行，其 stdout 被重定向到内部管道。在 Linux/WSL 下，脚本通过遍历进程树找到 Claude 所在的 PTY（如 `/dev/pts/0`），然后直接写入该设备。在 Windows 下，脚本通过打开 `CONOUT$` 句柄绕过 stdout 重定向。
 
-### Windows Terminal 进度条动画
+### 标签页进度动画（OSC 9;4）
 
-使用 Windows Terminal 专有的 OSC 9;4 转义序列：
+使用 OSC 9;4 转义序列（源自 ConEmu，现已被广泛采纳）：
 
 - `\033]9;4;3;0\007` -- 开启 indeterminate 进度动画（loading 圆环）
 - `\033]9;4;0;0\007` -- 清除进度动画
 
+支持的终端：Windows Terminal、iTerm2 (v3.5.6+)、Ghostty (v1.2.0+)、WezTerm、Konsole (KDE Gear 2025-04)、VTE/Ptyxis。不支持：Kitty（与 OSC 9 通知冲突）、Alacritty。
+
 ### 为什么不用 OSC 0 修改标签页标题？
 
-Claude Code 作为 TUI 应用持续管理终端标题，任何外部写入的 OSC 0 序列会被立即覆盖。OSC 9;4 是 Windows Terminal 独有扩展，不受 Claude Code 干预。
+Claude Code 作为 TUI 应用持续管理终端标题，任何外部写入的 OSC 0 序列会被立即覆盖。OSC 9;4 不受 Claude Code 标题管理的影响。
 
 ### Toast 通知
 
