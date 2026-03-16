@@ -1,5 +1,7 @@
 # Claude Code 通知系统
 
+> **已废弃**：本仓库已合并至 [Ynewtime/dotai](https://github.com/Ynewtime/dotai)，后续更新将在该仓库发布。最新版本见 [hooks/cc-notify](https://github.com/Ynewtime/dotai/tree/main/hooks/cc-notify)。
+
 [English](README.md)
 
 为 Claude Code 提供标签页状态指示和桌面通知。

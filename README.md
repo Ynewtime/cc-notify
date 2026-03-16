@@ -1,5 +1,7 @@
 # Claude Code Notification System
 
+> **Deprecated**: This repo has been merged into [Ynewtime/dotai](https://github.com/Ynewtime/dotai). Future updates will be published there. See [hooks/cc-notify](https://github.com/Ynewtime/dotai/tree/main/hooks/cc-notify) for the latest version.
+
 [中文文档](README_ZH.md)
 
 Tab status indicators and desktop notifications for Claude Code.
